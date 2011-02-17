@@ -112,8 +112,40 @@ class Settings
     self.available.delete(a)
 
     puts "Unable to find someone for #{a.number} to talk to, chillin' them."
-    self.chill[a] = Time.now + (60 * 2)
+    chill_out a, (60 * 2)
     nil
+  end
+
+  def chill_out(who, how_long)
+    @chill[who] = Time.now + how_long
+  end
+
+  def check_chill
+    done = []
+    @chill.each do |goer, time|
+      if time < Time.now
+        puts "#{goer.number} is done chillin', back to the party!"
+        @available << goer
+        done << goer
+      end
+    end
+
+    done.each { |g| @chill.delete(g) }
+  end
+
+  def number_status(num)
+    goer = @party_people[num]
+    if !goer
+      "{ \"#{num}\": \"never seen\" }"
+    elsif @available.include?(goer)
+      "{ \"#{num}\": \"ready to party\" }"
+    elsif w = @chill[goer]
+      "{ \"#{num}\": [\"chillin\", \"#{w}\"] }"
+    elsif @pending.include?(goer)
+      "{ \"#{num}\": \"pending\" }"
+    else
+      "{ \"#{num}\": \"not partying\" }"
+    end
   end
 end
 
@@ -149,16 +181,7 @@ end
 ChillDJ = Thread.new do
   while true
     Cord.synchronize do
-      done = []
-      S.chill.each do |goer, time|
-        if time < Time.now
-          puts "#{goer.number} is done chillin', back to the party!"
-          S.available << goer
-          done << goer
-        end
-      end
-
-      done.each { |g| S.chill.delete(g) }
+      S.check_chill
     end
     sleep 2
   end
@@ -174,6 +197,10 @@ Thread.abort_on_exception = true
 class PartyTo < Sinatra::Base
   get '/' do
     "Why are you here party person?"
+  end
+
+  get '/status/:number' do |num|
+    S.number_status S.numberize(num)
   end
 
   post '/call' do
@@ -199,10 +226,10 @@ class PartyTo < Sinatra::Base
           elsif S.pending.include?(goer)
             puts "Weird. We're calling #{from} right now..."
             S.pending.delete goer
-            S.available << goer
+            S.chill_out goer, 30
           else
             puts "#{from} is calling us! Wants to party!"
-            S.available << goer
+            S.chill_out goer, 30
           end
         end
       end
@@ -270,8 +297,8 @@ XML
       if cohort = S.running.delete(from)
         puts "Placing #{from} and #{to} in the chill zone."
 
-        S.chill[cohort] = Time.now + ChillTime
-        S.chill[S.party_people[from]] = Time.now + ChillTime
+        S.chill_out cohort, ChillTime
+        S.chill_out S.party_people[from], ChillTime
       else
         puts "Weird, #{from} isn't actually partying. Loser."
       end

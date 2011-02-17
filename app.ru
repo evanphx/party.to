@@ -73,6 +73,11 @@ class Settings
       self.pending << b
     end
 
+    # Pick the older user to call
+    if b.last_call < a.last_call
+      b, a = a, b
+    end
+
     puts "Making a call to #{a.number} to connect with #{b.number}"
     rep = Twilio::Call.make(CallerID, a.number,
                             "http://backend.party.to/bridge/#{urlize(b.number)}")
@@ -172,8 +177,6 @@ class PartyTo < Sinatra::Base
   end
 
   post '/call' do
-    p params
-
     from = params["From"]
     status = params["CallStatus"]
 
@@ -219,8 +222,6 @@ class PartyTo < Sinatra::Base
     from = params["Called"]
     to = S.numberize(to)
 
-    p params
-
     cohort = S.party_people[to]
 
     Cord.synchronize do
@@ -256,8 +257,6 @@ XML
   end
 
   post "/party_started/:from/:to" do |from,to|
-    p params
-
     from = S.numberize(from)
     to = S.numberize(to)
 
